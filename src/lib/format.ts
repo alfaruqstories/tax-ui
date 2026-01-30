@@ -16,3 +16,24 @@ export function formatCurrency(amount: number, showSign = false): string {
 export function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
+
+export function formatPercentChange(current: number, previous: number): string {
+  const change = ((current - previous) / Math.abs(previous)) * 100;
+  const sign = change >= 0 ? "+" : "";
+  return `${sign}${change.toFixed(1)}%`;
+}
+
+export function formatCompact(amount: number): string {
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+
+  if (abs >= 1_000_000) {
+    const value = abs / 1_000_000;
+    return `${sign}$${value.toFixed(value >= 10 ? 1 : 2)}M`;
+  }
+  if (abs >= 1_000) {
+    const value = abs / 1_000;
+    return `${sign}$${value.toFixed(value >= 100 ? 0 : 0)}K`;
+  }
+  return `${sign}$${abs.toFixed(0)}`;
+}
