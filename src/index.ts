@@ -1,8 +1,15 @@
 import { serve, argv } from "bun";
 import Anthropic from "@anthropic-ai/sdk";
-import { getReturns, saveReturn, deleteReturn, getApiKey, saveApiKey, clearAllData } from "./lib/storage";
+import { getReturns, saveReturn, deleteReturn, getApiKey, saveApiKey, removeApiKey, clearAllData } from "./lib/storage";
 import { parseTaxReturn, extractYearFromPdf } from "./lib/parser";
 import index from "./index.html";
+
+// Model used for lightweight operations (validation, suggestions)
+const FAST_MODEL = "claude-haiku-4-5-20251001";
+
+function isAuthError(message: string): boolean {
+  return message.includes("authentication") || message.includes("401") || message.includes("API key");
+}
 
 // Parse --port=XXXX from command line args
 const portArg = argv.find((arg) => arg.startsWith("--port="));
@@ -44,6 +51,23 @@ const server = serve({
         if (!apiKey || typeof apiKey !== "string") {
           return Response.json({ error: "Invalid API key" }, { status: 400 });
         }
+
+        // Validate the key with a minimal API call
+        try {
+          const client = new Anthropic({ apiKey: apiKey.trim() });
+          await client.messages.create({
+            model: FAST_MODEL,
+            max_tokens: 1,
+            messages: [{ role: "user", content: "hi" }],
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (isAuthError(message)) {
+            return Response.json({ error: "Invalid API key" }, { status: 401 });
+          }
+          // Other errors (rate limit, etc.) - key is probably valid
+        }
+
         await saveApiKey(apiKey.trim());
         return Response.json({ success: true });
       },
@@ -90,6 +114,11 @@ const server = serve({
           return Response.json({ year });
         } catch (error) {
           console.error("Year extraction error:", error);
+          const message = error instanceof Error ? error.message : "";
+          if (isAuthError(message)) {
+            await removeApiKey();
+            return Response.json({ error: "Invalid API key" }, { status: 401 });
+          }
           return Response.json({ year: null });
         }
       },
@@ -138,6 +167,10 @@ const server = serve({
         } catch (error) {
           console.error("Chat error:", error);
           const message = error instanceof Error ? error.message : "Unknown error";
+          if (isAuthError(message)) {
+            await removeApiKey();
+            return Response.json({ error: "Invalid API key" }, { status: 401 });
+          }
           return Response.json({ error: message }, { status: 500 });
         }
       },
@@ -166,7 +199,7 @@ const server = serve({
           messages.push({ role: "user", content: "Suggest 3 follow-up questions I might ask." });
 
           const response = await client.messages.create({
-            model: "claude-haiku-4-5-20251001",
+            model: FAST_MODEL,
             max_tokens: 256,
             system: `You are helping a user explore their own tax return data. Generate 3 short follow-up questions the user might want to ask about their finances. Phrase questions in FIRST PERSON (e.g., "Why did my income drop?" not "Why did your income drop?").`,
             messages,
@@ -206,22 +239,24 @@ const server = serve({
           return Response.json({ error: "No API key provided" }, { status: 400 });
         }
 
-        // Save key to .env if provided via form
-        if (apiKeyFromForm?.trim()) {
-          await saveApiKey(apiKeyFromForm.trim());
-        }
-
         try {
           const buffer = await file.arrayBuffer();
           const base64 = Buffer.from(buffer).toString("base64");
           const taxReturn = await parseTaxReturn(base64, apiKey);
+
+          // Save key only after successful parse
+          if (apiKeyFromForm?.trim()) {
+            await saveApiKey(apiKeyFromForm.trim());
+          }
+
           await saveReturn(taxReturn);
           return Response.json(taxReturn);
         } catch (error) {
           console.error("Parse error:", error);
           const message = error instanceof Error ? error.message : "Unknown error";
 
-          if (message.includes("authentication") || message.includes("API key")) {
+          if (isAuthError(message)) {
+            await removeApiKey();
             return Response.json({ error: "Invalid API key" }, { status: 401 });
           }
           if (message.includes("prompt is too long") || message.includes("too many tokens")) {

@@ -1,7 +1,14 @@
 import { Button as BaseButton } from "@base-ui/react/button";
 import type { ComponentProps, ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "outline" | "danger" | "danger-outline" | "pill";
+type Variant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "outline"
+  | "danger"
+  | "danger-outline"
+  | "pill";
 type Size = "sm" | "md";
 
 interface ButtonProps extends Omit<
@@ -18,7 +25,7 @@ interface ButtonProps extends Omit<
 const variantStyles: Record<Variant, string> = {
   primary: "bg-(--color-text) text-(--color-bg) hover:opacity-90",
   secondary:
-    "bg-(--color-bg-muted) text-(--color-text) hover:bg-(--color-bg-subtle)",
+    "bg-(--color-bg-muted) text-(--color-text) hover:bg-(--color-bg-muted-hover)",
   ghost:
     "text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-bg-muted)",
   outline:
@@ -51,7 +58,7 @@ export function Button({
   return (
     <BaseButton
       className={[
-        "font-medium",
+        "font-medium select-none",
         "rounded-lg outline-none",
         "focus-visible:ring-2 focus-visible:ring-(--color-text-muted) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-bg)",
         "disabled:opacity-50 disabled:cursor-not-allowed",
